@@ -16,8 +16,10 @@ public class CustomMessages : Singleton<CustomMessages>
     public enum TestMessageID : byte
     {
         HeadTransform = MessageID.UserMessageIDStart,
-        Max,
-        StartedOrChanged
+        PlaneTextAndTransform,
+        BaseTransform,
+        RemoveKeys,
+        Max
     }
 
     public enum UserMessageChannels
@@ -113,7 +115,7 @@ public class CustomMessages : Singleton<CustomMessages>
         if (this.serverConnection != null && this.serverConnection.IsConnected())
         {
             // Create an outgoing network message to contain all the info we want to send
-            NetworkOutMessage msg = CreateMessage((byte)TestMessageID.StartedOrChanged);
+            NetworkOutMessage msg = CreateMessage((byte)TestMessageID.HeadTransform);
 
             AppendTransform(msg, position, rotation);
 
@@ -122,6 +124,63 @@ public class CustomMessages : Singleton<CustomMessages>
                 msg,
                 MessagePriority.Immediate,
                 MessageReliability.UnreliableSequenced,
+                MessageChannel.Avatar);
+        }
+    }
+
+    public void SendPlaneTextAndTransform(Vector3 position , Quaternion rotation, string text)
+    {
+        // If we are connected to a session, broadcast our head info
+        if (this.serverConnection != null && this.serverConnection.IsConnected())
+        {
+            // Create an outgoing network message to contain all the info we want to send
+            NetworkOutMessage msg = CreateMessage((byte)TestMessageID.PlaneTextAndTransform);
+            AppendTransform(msg, position, rotation);
+            msg.Write(text);
+
+            // Send the message as a broadcast, which will cause the server to forward it to all other users in the session.
+            this.serverConnection.Broadcast(
+                msg,
+                MessagePriority.Immediate,
+                MessageReliability.Reliable,
+                MessageChannel.Avatar);
+        }
+    }
+
+    public void SendBaseTransform(Vector3 position, Quaternion rotation)
+    {
+        if (this.serverConnection != null && this.serverConnection.IsConnected())
+        {
+            // Create an outgoing network message to contain all the info we want to send
+            NetworkOutMessage msg = CreateMessage((byte)TestMessageID.BaseTransform);
+            AppendTransform(msg, position, rotation);
+
+            // Send the message as a broadcast, which will cause the server to forward it to all other users in the session.
+            this.serverConnection.Broadcast(
+                msg,
+                MessagePriority.Immediate,
+                MessageReliability.ReliableOrdered,
+                MessageChannel.Avatar);
+        }
+    }
+
+    public void SendKeysToRemove(IEnumerable<string> keys)
+    {
+        if (this.serverConnection != null && this.serverConnection.IsConnected())
+        {
+            // Create an outgoing network message to contain all the info we want to send
+            NetworkOutMessage msg = CreateMessage((byte)TestMessageID.BaseTransform);
+
+            foreach (var key in keys)
+            {
+                msg.Write(key);
+            }
+
+            // Send the message as a broadcast, which will cause the server to forward it to all other users in the session.
+            this.serverConnection.Broadcast(
+                msg,
+                MessagePriority.Immediate,
+                MessageReliability.ReliableOrdered,
                 MessageChannel.Avatar);
         }
     }

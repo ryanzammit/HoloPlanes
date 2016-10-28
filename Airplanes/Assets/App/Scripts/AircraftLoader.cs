@@ -3,6 +3,8 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using AirTraffic.DataObjects;
+using UnityEngine.VR.WSA;
+using HoloToolkit.Sharing;
 #if UNITY_UWP
 using System.Diagnostics;
 #endif
@@ -26,8 +28,22 @@ public class AircraftLoader : MonoBehaviour {
 
     private FlightSet set = new FlightSet();
 
+    private bool isMaster;
+
     void Start()
     {
+        CustomMessages.Instance.MessageHandlers[CustomMessages.TestMessageID.BaseTransform] = this.OnStageTransfrom;
+        CustomMessages.Instance.MessageHandlers[CustomMessages.TestMessageID.PlaneTextAndTransform] = this.OnPlaneTranform;
+        CustomMessages.Instance.MessageHandlers[CustomMessages.TestMessageID.RemoveKeys] = OnRemoveKeys;
+        SharingSessionTracker.Instance.SessionJoined += Instance_SessionJoined;
+        if (SharingSessionTracker.Instance.UserIds.Count == 1)
+        {
+            isMaster = true;
+        }
+        else
+        {
+            isMaster = false;
+        }
         _aircrafts = new Dictionary<string, GameObject>();
         _topLevelObject = GameObject.Find(TopLevelName);
         _receivedData = new Queue<FlightSet>();
@@ -35,6 +51,17 @@ public class AircraftLoader : MonoBehaviour {
         _receivedData.Enqueue(new FlightSet(DataService.Instance.GetFlights()));
 #endif
 
+    }
+
+    void OnStageTransfrom(NetworkInMessage msg)
+    {
+        // We read the user ID but we don't use it here.
+        msg.ReadInt64();
+
+        transform.localPosition = CustomMessages.Instance.ReadVector3(msg);
+        transform.localRotation = CustomMessages.Instance.ReadQuaternion(msg);
+
+        GotTransform = true;
     }
 
     public void OnReset()
@@ -81,8 +108,8 @@ public class AircraftLoader : MonoBehaviour {
     }
 #endif
     void Update()
-    {   
-        if (!_isUpdated)
+    {
+        if (!_isUpdated && isMaster)
         {
             _isUpdated = true;
             set = _receivedData.Dequeue();
@@ -118,6 +145,12 @@ public class AircraftLoader : MonoBehaviour {
             aircraft.transform.localScale = new Vector3(0f, 0f, 0f);
             SetNewFlightData(aircraft, flight);
             _aircrafts.Add(flight.Id, aircraft);
+#if UNITY_UWP
+            if (isMaster)
+            {
+                CustomMessages.Instance.SendPlaneTextAndTransform(aircraft.transform.position, aircraft.transform.rotation, flight.ToString());
+            }
+#endif
 #if UNITY_UWP
             flight.lastUpdate = DateTimeOffset.Now;
 #endif
@@ -163,4 +196,24 @@ public class AircraftLoader : MonoBehaviour {
         }
     }
 #endif
+
+    public bool GotTransform { get; private set; }
+
+    private void Instance_SessionJoined(object sender, SharingSessionTracker.SessionJoinedEventArgs e)
+    {
+        if (GotTransform)
+        {
+            CustomMessages.Instance.SendBaseTransform(transform.localPosition, transform.localRotation);
+        }
+    }
+
+    public void OnPlaneTranform(NetworkInMessage msg)
+    {
+
+    }
+
+    public void OnRemoveKeys(NetworkInMessage msg)
+    {
+
+    }
 }
